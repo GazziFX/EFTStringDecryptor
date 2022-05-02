@@ -36,7 +36,7 @@ namespace Decryptor
 
             var asm = Assembly.LoadFrom(path);
             var methodInfo = asm.ManifestModule.ResolveMethod((int)token);
-            var invokeArgs = new object[1];
+            var invokeArgs = new object[2];
 
             int replaced = 0;
             int errors = 0;
@@ -50,7 +50,7 @@ namespace Decryptor
                         continue;
 
                     var insts = body.Instructions;
-                    for (int i = 1; i < insts.Count; i++)
+                    for (int i = 2; i < insts.Count; i++)
                     {
                         var inst = insts[i];
                         if (inst.OpCode.Code != Code.Call || inst.Operand != decryptMethod)
@@ -60,14 +60,26 @@ namespace Decryptor
                         if (!inst.IsLdcI4())
                             continue;
 
+                        int value1 = inst.GetLdcI4Value();
+
+                        inst = insts[i - 2];
+                        if (inst.OpCode.Code != Code.Ldstr)
+                            continue;
+
+                        string value0 = inst.Operand as string;
+                        if (value0 == null)
+                            continue;
+
                         try
                         {
-                            invokeArgs[0] = inst.GetLdcI4Value();
+                            invokeArgs[0] = value0;
+                            invokeArgs[1] = value1;
                             inst.Operand = methodInfo.Invoke(null, invokeArgs);
-                            inst.OpCode = OpCodes.Ldstr;
+                            //inst.OpCode = OpCodes.Ldstr;
                             replaced++;
 
                             insts[i].OpCode = OpCodes.Nop;
+                            insts[i - 1].OpCode = OpCodes.Nop;
                         }
                         catch (Exception)
                         {
